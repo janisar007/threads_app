@@ -1,0 +1,44 @@
+import React from 'react'
+import Link from 'next/link';
+import Image from 'next/image';
+import { SignedIn, SignOutButton, OrganizationSwitcher } from '@clerk/nextjs';
+import { dark } from '@clerk/themes';
+
+
+
+export default function Topbar() {
+  return (
+    <nav className='topbar'>
+      <Link href='/' className='flex items-center gap-4'>
+        <Image src="/assets/logo.svg" alt='logo' width={28} height={28}/>
+        <p className='text-heading3-bold text-light-1 max-xs:hidden'>Threads</p>
+      </Link>
+
+      <div className='flex items-center gap-1'>
+        <div className='block md:hidden'>
+
+          {/*//* This SignedIn compo is from clerk and the content in it wil only shown on the browser if the sue ris signed in.*/}
+          <SignedIn>
+            <SignOutButton>
+              <div className='flex cursor-pointer'>
+                <Image src='/assets/logout.svg' alt='logout' width={24} height={24}/>
+              </div>
+            </SignOutButton>
+          </SignedIn>
+        </div>
+
+
+        <OrganizationSwitcher
+          appearance={{
+            baseTheme: dark, //it is to cutomize top right profile account things provided by clerk
+            elements: {
+              organizationSwitcherTrigger: "py-2 px-4"
+            }
+          }} 
+        />{/*This is from clerk aswell and provides prebuild management setting in the navbar.*/}
+
+      </div>
+          
+    </nav>
+  )
+}

@@ -1,0 +1,14 @@
+LIBRARIES -->
+1. @clerk/nextjs: for authentication, email pass log in, managing your account once you are in, and will also use it in some how bulding communities section.
+
+2. @uploadthing/react:to upload our profile images.
+
+3. uploadthing: its the actual library. the seconod one is for react.
+
+4. svix: for web hooks.
+
+5. @clerk/themes: to customize the top right profile picture and font etc.
+
+
+
+//FIXES->
