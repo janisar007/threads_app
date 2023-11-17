@@ -1,11 +1,12 @@
 "use server";
 
 import { FilterQuery, SortOrder } from "mongoose";
+import Community from "../models/community.model";
 import Thread from "../models/thread.model";
 import User from "../models/user.model";
 import { connectToDB } from "../mongoose";
 import { revalidatePath } from "next/cache";
-import { AnyAaaaRecord } from "dns";
+
 
 interface Params {
   userId: string;
@@ -45,12 +46,12 @@ export async function fetchUser(userId: string) {
   try {
     connectToDB();
 
-    const user = await User.findOne({id: userId});
-    
-    return user;
-
+    return await User.findOne({ id: userId }).populate({
+      path: "communities",
+      model: Community,
+    });
   } catch (error: any) {
-    throw new Error("something went wrong", error);
+    throw new Error(`Failed to fetch user: ${error.message}`);
   }
 }
 
@@ -59,17 +60,26 @@ export async function fetchUserPosts(userId: string) {
     connectToDB();
 
     //Find all threads authored by user with the given userId->
-    const threads = await User.findOne({id: userId})
-    .populate({
-      path: 'threads',
+    const threads = await User.findOne({ id: userId }).populate({
+      path: "threads",
       model: Thread,
-      populate: {
-        path: 'children',
-        model: User,
-        select: 'name image id'
-      }
-      //TODO: populate community as well
-    })
+      populate: [
+        {
+          path: "community",
+          model: Community,
+          select: "name id image _id", // Select the "name" and "_id" fields from the "Community" model
+        },
+        {
+          path: "children",
+          model: Thread,
+          populate: {
+            path: "author",
+            model: User,
+            select: "name image id", // Select the "name" and "_id" fields from the "User" model
+          },
+        },
+      ],
+    });
 
     return threads;
   } catch (error: any) {

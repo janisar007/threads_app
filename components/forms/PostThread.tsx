@@ -21,6 +21,8 @@ import { ThreadValidation } from "@/lib/validations/thread";
 import { createThread } from "@/lib/actions/thread.actions";
 // import { updateUser } from "@/lib/actions/user.actions";
 
+import { useOrganization } from "@clerk/nextjs";
+
 interface Props {
   user: {
     id: string;
@@ -37,6 +39,7 @@ interface Props {
 export default function PostThread({ userId }: { userId: string }) {
   const router = useRouter();
   const pathname = usePathname();
+  const {organization} = useOrganization();
 
   //Zod is typescript based schema validator. we can use it to validate our form data. and we can also create schema with it.
   const form = useForm({
@@ -52,7 +55,7 @@ export default function PostThread({ userId }: { userId: string }) {
     await createThread({
       text: values.thread,
       author: userId,
-      communityId: null,
+      communityId: organization ? organization.id : null,
       path: pathname,
     });
 
