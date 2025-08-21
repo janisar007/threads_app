@@ -27,6 +27,7 @@ const threadSchema = new mongoose.Schema({
           ref: "Thread",
         },
       ],
+      likeCount: { type: Number, default: 0 }  // quick access
 
       //so this like ->
       /*

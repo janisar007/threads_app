@@ -1,11 +1,24 @@
 import { formatDateString } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
-import React from "react";
+import React, { useState } from "react";
+
+import { IoIosHeartEmpty } from "react-icons/io";
+import { IoIosHeart } from "react-icons/io";
+
+import { FaRegCommentDots } from "react-icons/fa6";
+
+import { PiShareFat } from "react-icons/pi";
+
+import { IoPaperPlaneOutline } from "react-icons/io5";
+import { getThreadLikes, likeThread } from "@/lib/actions/like.actions";
+import LikeButton from "../Threads/LikeButton";
+// import { usePathname } from "next/navigation";
 
 interface Props {
   id: string;
   currentUserId: string;
+  userId: string;
   parentId: string | null;
   content: string;
   author: {
@@ -25,12 +38,15 @@ interface Props {
     };
   }[];
   isComment?: boolean;
+  likeCount: number;
+  isLikedByCurrentUser: boolean;
 }
 
 //its only general thread card not the full detail for every thread with comments and stuff
-const ThreadCard = ({
+const ThreadCard = async ({
   id,
   currentUserId,
+  userId,
   parentId,
   content,
   author,
@@ -38,7 +54,12 @@ const ThreadCard = ({
   createdAt,
   comments,
   isComment,
+  likeCount,
+  isLikedByCurrentUser,
 }: Props) => {
+  // const path = usePathname();
+  const liked_users = await getThreadLikes(id);
+
   return (
     <article
       className={`flex w-full flex-col rounded-xl ${
@@ -70,24 +91,32 @@ const ThreadCard = ({
             <p className="mt-2 text-small-regular text-light-2">{content}</p>
 
             <div className={`${isComment && "mb-10"} mt-5 flex flex-col gap-3`}>
-              <div className="flex gap-3.5">
-                <Image
-                  src="/assets/heart-gray.svg"
-                  alt="heart"
-                  width={24}
-                  height={24}
-                  className="cursor-pointer object-contain"
+              <div className="flex gap-3.5 items-start">
+                <LikeButton
+                  liked_users={liked_users}
+                  likeCount={likeCount}
+                  threadId={id}
+                  userId={userId}
+                  isLikedByCurrentUser={isLikedByCurrentUser}
                 />
 
                 <Link href={`/thread/${id}`}>
+
+                <span className="flex flex-col justify-center items-center">
                   <Image
                     src="/assets/reply.svg"
-                    alt="heart"
+                    alt="reply"
                     width={24}
                     height={24}
                     className="cursor-pointer object-contain"
                   />
+
+                  <span className="text-[#5C5C7B] text-[0.6rem]">{comments?.length || 0}</span>
+
+
+                </span>
                 </Link>
+                
 
                 <Image
                   src="/assets/repost.svg"

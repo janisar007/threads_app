@@ -4,6 +4,30 @@ import Thread from "../models/thread.model";
 import User from "../models/user.model";
 import Community from "../models/community.model";
 import { connectToDB } from "../mongoose";
+import Like from "../models/like.model";
+
+import { Types } from "mongoose";
+
+interface PopulatedLike {
+  _id: Types.ObjectId;
+  user: {
+    _id: Types.ObjectId;
+    name: string;
+    image?: string;
+  };
+}
+
+export interface ThreadWithLikes {
+  _id: Types.ObjectId;
+  text: string;
+  author: any; // or a refined populated type
+  community: any;
+  children: any[];
+  likeCount: number;
+  likes: PopulatedLike[];
+  isLikedByCurrentUser: boolean;
+  createdAt: Date;
+}
 
 interface Params {
   text: string;
@@ -51,31 +75,32 @@ export async function createThread({
   }
 }
 
-export async function fetchPosts(pageNumber = 1, pageSize = 20) {
+export async function fetchPosts(
+  pageNumber = 1,
+  pageSize = 20,
+  userId?: string // ✅ pass current logged-in user ID
+) {
   try {
     connectToDB();
 
-    //calculate the number of posts to skip->
     const skipAmount = (pageNumber - 1) * pageSize;
 
-    //now fetch that threads which has no parents coz they are the top level threads ->
+    // fetch parent threads only
     const postQuery = Thread.find({ parentId: { $in: [null, undefined] } })
       .sort({ createdAt: "desc" })
       .skip(skipAmount)
       .limit(pageSize)
-      .populate({ path: "author", model: User }) //this will get us the author details from the user model as well for every thread.
+      .populate({ path: "author", model: User })
+      .populate({ path: "community", model: Community })
       .populate({
-      path: "community",
-      model: Community,
-    })
-      .populate({
-        path: "children", //path = the name of property in the Thread model.
+        path: "children",
         populate: {
           path: "author",
           model: User,
           select: "_id name parentId image",
         },
-      });
+      })
+      .lean();
 
     const totalPostCount = await Thread.countDocuments({
       parentId: { $in: [null, undefined] },
@@ -83,9 +108,28 @@ export async function fetchPosts(pageNumber = 1, pageSize = 20) {
 
     const posts = await postQuery.exec();
 
-    const isNext = totalPostCount > skipAmount + posts.length;
+    // ✅ If user is logged in, get which posts they liked
+    let likedPostIds: Set<string> = new Set();
+    if (userId) {
+      const likes = await Like.find({
+        thread: { $in: posts.map((p) => p._id) },
+        user: userId,
+      }).lean();
 
-    return { posts, isNext };
+      likedPostIds = new Set(likes.map((like) => like.thread.toString()));
+    }
+
+    // build final result
+    const result = posts.map((post: any) => ({
+      ...post,
+      likeCount: post.likeCount || 0,
+      isLikedByCurrentUser: userId
+        ? likedPostIds.has(post._id.toString())
+        : false,
+    }));
+
+    const isNext = totalPostCount > skipAmount + posts.length;
+    return { posts: result, isNext } as any;
   } catch (error: any) {
     throw new Error(
       `Something went wrong in fetchPosts action. ${error.message}`
@@ -93,12 +137,14 @@ export async function fetchPosts(pageNumber = 1, pageSize = 20) {
   }
 }
 
-export async function fetchThreadById(id: string) {
+export async function fetchThreadById(
+  id: string,
+  userId?: string
+): Promise<ThreadWithLikes | null> {
   try {
     connectToDB();
 
-    //Todo: Populate community
-    const thread = await Thread.findById(id)
+    const thread: any = await Thread.findById(id)
       .populate({
         path: "author",
         model: User,
@@ -108,9 +154,8 @@ export async function fetchThreadById(id: string) {
         path: "community",
         model: Community,
         select: "_id id name image",
-      }) 
+      })
       .populate({
-        //populating the childrens thread or comments
         path: "children",
         populate: [
           {
@@ -119,7 +164,7 @@ export async function fetchThreadById(id: string) {
             select: "_id id name parentId image",
           },
           {
-            path: "children",
+            path: "children", // keep nested but no need to calculate deeper
             model: Thread,
             populate: {
               path: "author",
@@ -129,11 +174,60 @@ export async function fetchThreadById(id: string) {
           },
         ],
       })
-      .exec();
+      .lean();
 
-    return thread;
+    if (!thread) throw new Error("Thread not found");
+
+    // --- Main thread likes ---
+    const likes = await Like.find({ thread: id })
+      .populate("user", "_id name image")
+      .lean();
+
+    let isLikedByCurrentUser = false;
+    if (userId) {
+      isLikedByCurrentUser = likes.some(
+        (l) => l.user._id.toString() === userId.toString()
+      );
+    }
+
+    // --- Children likes in ONE query ---
+    const childIds = (thread.children || []).map((c: any) => c._id);
+    const childrenLikes = await Like.find({ thread: { $in: childIds } })
+      .populate("user", "_id name image")
+      .lean();
+
+    // Group likes by threadId
+    const likesMap = childrenLikes.reduce((acc: any, like: any) => {
+      const tid = like.thread.toString();
+      if (!acc[tid]) acc[tid] = [];
+      acc[tid].push(like);
+      return acc;
+    }, {});
+
+    // Attach likes + isLikedByCurrentUser to each child
+    thread.children = (thread.children || []).map((child: any) => {
+      const childLikes = likesMap[child._id.toString()] || [];
+
+      let childIsLiked = false;
+      if (userId) {
+        childIsLiked = childLikes.some(
+          (l: any) => l.user._id.toString() === userId.toString()
+        );
+      }
+
+      return {
+        ...child,
+        likes: childLikes,
+        isLikedByCurrentUser: childIsLiked, // ✅ directly inside child
+      };
+    });
+
+    return {
+      ...thread,
+      likes,
+      isLikedByCurrentUser,
+    } as any;
   } catch (error: any) {
-    console.log(error);
     throw new Error(
       `Something went wrong in fetchThread by id action. ${error.message}`
     );
@@ -246,4 +340,3 @@ export async function deleteThread(id: string, path: string): Promise<void> {
     throw new Error(`Failed to delete thread: ${error.message}`);
   }
 }
-
