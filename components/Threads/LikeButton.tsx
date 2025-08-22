@@ -1,4 +1,3 @@
-// Client component
 "use client";
 
 import { likeThread, unlikeThread } from "@/lib/actions/like.actions";
@@ -23,38 +22,54 @@ export default function LikeButton({
 }) {
   const pathname = usePathname();
 
-  const [likeLoading, setLikeLoading] = useState<any>(false);
+  // Local states for optimistic UI
+  const [liked, setLiked] = useState(isLikedByCurrentUser);
+  const [count, setCount] = useState(likeCount);
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
-    ring2.register(); // 👈 register the <l-ring-2> element
+    ring2.register();
   }, []);
 
   async function handleLike() {
-    try {
-      setLikeLoading(true);
+    // Optimistic update
+    setLiked(true);
+    setCount((prev) => prev + 1);
 
-      await likeThread({ threadId, userId, path: pathname }); // 👈 pass pathname
+    try {
+      setLoading(true);
+      await likeThread({ threadId, userId, path: pathname });
     } catch (error) {
       console.log(error);
+      // rollback on failure
+      setLiked(false);
+      setCount((prev) => prev - 1);
     } finally {
-      setLikeLoading(false);
+      setLoading(false);
     }
   }
 
   async function handleUnLike() {
-    try {
-      setLikeLoading(true);
+    // Optimistic update
+    setLiked(false);
+    setCount((prev) => Math.max(0, prev - 1));
 
-      await unlikeThread({ threadId, userId, path: pathname }); // 👈 pass pathname
+    try {
+      setLoading(true);
+      await unlikeThread({ threadId, userId, path: pathname });
     } catch (error) {
       console.log(error);
+      // rollback on failure
+      setLiked(true);
+      setCount((prev) => prev + 1);
     } finally {
-      setLikeLoading(false);
+      setLoading(false);
     }
   }
 
   return (
     <span className="text-[1.3rem] flex flex-col items-center mt-[0.16rem]">
-      {likeLoading ? (
+      {/* {loading && (
         <l-ring-2
           size="18"
           stroke="2"
@@ -63,19 +78,22 @@ export default function LikeButton({
           speed="0.8"
           color="#5C5C7B"
         ></l-ring-2>
-      ) : !isLikedByCurrentUser ? (
+      )} */}
+
+      { !liked ? (
         <IoIosHeartEmpty
           onClick={handleLike}
-          className=" cursor-pointer text-[#5C5C7B] hover:text-red-500"
+          className="cursor-pointer text-[#5C5C7B] hover:text-red-500"
         />
-      ) : (
+      ) :  liked ? (
         <IoIosHeart
           onClick={handleUnLike}
           className="text-red-500 cursor-pointer"
         />
-      )}
+      ) : null}
+
       <span className="text-[0.6rem] text-[#5C5C7B]">
-        <LikeUser liked_users={liked_users} likeCount={likeCount} />
+        <LikeUser liked_users={liked_users} likeCount={count} />
       </span>
     </span>
   );
